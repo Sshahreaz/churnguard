@@ -1,7 +1,8 @@
-"""FastAPI app entry point for ChurnGuard."""
+﻿"""FastAPI app entry point for ChurnGuard."""
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -15,6 +16,12 @@ from app.schemas import CustomerRisk, DashboardSummary, HealthResponse
 # In-memory store populated once at startup
 _customer_risks: list[CustomerRisk] = []
 _dashboard_summary: DashboardSummary | None = None
+
+
+def _cors_origins() -> list[str]:
+    """Parse CORS_ORIGINS (comma-separated); default to local Next.js."""
+    raw = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 def _build_startup_state() -> tuple[list[CustomerRisk], DashboardSummary]:
@@ -69,7 +76,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

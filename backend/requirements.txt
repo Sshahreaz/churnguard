@@ -2,6 +2,7 @@ fastapi
 uvicorn
 pandas
 scikit-learn
-pydantic
-python-multipart
 shap
+openpyxl
+python-multipart
+pydantic

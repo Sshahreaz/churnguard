@@ -1,0 +1,8 @@
+# Render Blueprint — set Root Directory to `backend` in the dashboard,
+# or deploy this service with the start command below.
+services:
+  - type: web
+    name: churnguard-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
