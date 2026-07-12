@@ -16,10 +16,10 @@ export interface CustomerRisk {
   top_3_reasons: string[];
 }
 
-const API_BASE_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const res = await fetch(`${API_BASE_URL}/dashboard/summary`, {
+  const res = await fetch(`${API_URL}/dashboard/summary`, {
     cache: "no-store",
   });
 
@@ -33,7 +33,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 export async function getCustomerRisk(
   riskLevel?: RiskLevel,
 ): Promise<CustomerRisk[]> {
-  const url = new URL(`${API_BASE_URL}/customers/risk`);
+  const url = new URL(`${API_URL}/customers/risk`);
   if (riskLevel) {
     url.searchParams.set("risk_level", riskLevel);
   }
