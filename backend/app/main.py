@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.data_cleaning import load_and_clean
-from app.model import get_risk_scores, train_model
 from app.schemas import CustomerRisk, DashboardSummary, HealthResponse
 
-# In-memory store populated once at startup
+ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
+RISK_SCORES_PATH = ARTIFACTS_DIR / "risk_scores.json"
+
+# In-memory store populated once at startup from precomputed artifacts
 _customer_risks: list[CustomerRisk] = []
 _dashboard_summary: DashboardSummary | None = None
 
@@ -24,47 +27,24 @@ def _cors_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
-def _build_startup_state() -> tuple[list[CustomerRisk], DashboardSummary]:
-    """Load data, train once, score all customers, compute dashboard stats."""
-    cleaned_df, customer_ids = load_and_clean()
-    train_model()
-    scores, _cutoffs = get_risk_scores(cleaned_df)
-
-    risks: list[CustomerRisk] = []
-    for idx, row in scores.iterrows():
-        risks.append(
-            CustomerRisk(
-                customer_id=int(customer_ids.loc[idx]),
-                churn_probability=float(row["churn_probability"]),
-                risk_level=row["risk_level"],
-                top_3_reasons=list(row["top_3_reasons"]),
-            )
+def _load_startup_state() -> tuple[list[CustomerRisk], DashboardSummary]:
+    """Load precomputed risk scores from disk (no training / SHAP at runtime)."""
+    if not RISK_SCORES_PATH.exists():
+        raise FileNotFoundError(
+            f"Missing {RISK_SCORES_PATH}. Run: python -m scripts.train_and_save"
         )
 
-    high = sum(1 for r in risks if r.risk_level == "High")
-    medium = sum(1 for r in risks if r.risk_level == "Medium")
-    low = sum(1 for r in risks if r.risk_level == "Low")
-    overall_churn_rate = float(cleaned_df["Churn"].mean() * 100)
-    average_churn_probability = float(
-        sum(r.churn_probability for r in risks) / len(risks)
-    )
-
-    summary = DashboardSummary(
-        total_customers=len(risks),
-        high_risk_count=high,
-        medium_risk_count=medium,
-        low_risk_count=low,
-        overall_churn_rate=round(overall_churn_rate, 2),
-        average_churn_probability=round(average_churn_probability, 4),
-    )
+    payload = json.loads(RISK_SCORES_PATH.read_text(encoding="utf-8"))
+    risks = [CustomerRisk(**row) for row in payload["customers"]]
+    summary = DashboardSummary(**payload["dashboard"])
     return risks, summary
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Train model and precompute all customer risk scores on startup."""
+    """Load precomputed risk scores into memory on startup."""
     global _customer_risks, _dashboard_summary
-    _customer_risks, _dashboard_summary = _build_startup_state()
+    _customer_risks, _dashboard_summary = _load_startup_state()
     yield
 
 
